@@ -1,0 +1,166 @@
+RUNCMD(7)                   The runcmd exercise                       RUNCMD(7)
+
+NAME
+	runcmd - execute a program in a subprocess
+
+SYNOPSIS
+	int runcmd(const char *command, int *result, const int[3] io);
+
+	void (*runcmd_onexit)(void) = NULL;
+
+DESCRIPTION
+	runcmd() executes the program specified by 'command' in a subprocess.
+	If the return argument 'result' is not null, information on the 
+	subprocess execution is stored in this variable after the function
+	returns and can be inspected with the aid of a set of macros available
+	for this purpose. The argument 'io' is a pointer to an array of integers
+	where the first, second and third positions should contain the file 
+	descriptors to where the subprocess' standard input, standard output 
+	and standard errors are to be redirected; if 'io' is null, no 
+	redirection is performed. 
+
+	The command line specified by 'command' must be a string of blank-
+	separated words where the first word is interpreted as the name of the
+	program to be executed and the remainder words are its arguments, except
+	for the last word if this starts with the character '&' (see ahead)
+
+	runcmd() will block until the subprocess completes, unless nonblocking
+	mode is evoked.  Nonblocking mode is activated if the last word of
+	'command' is the ampersand character and it causes runcmd() to return
+	immediately, while the subprocess executes in parallel.  In nonblocking
+	mode, if the caller process stores the address of a function to the
+	global variable runcmd_onexit, this function will be called 
+	asynchronously upon the termination of the subprocess. 
+
+	In blocking mode, information about the command execution is stored
+	in argument 'result' upon the subprocess termination. The following
+	macros are provided to inspect the result:
+
+
+	IS_NORMTERM(result) returns true if the subprocess has terminated 
+                            normally; false otherwise
+
+	IS_NONBLOCK(result) returns true if the subprocess has been executed
+                            in nonblocking mode; false otherwise.
+
+        IS_EXECOK(result)   returns true if 'command' has been effectively 
+			    executed; false otherwise.
+
+        EXITSTATUS(result)  returns the exit status returned by the
+                            subproccess.
+
+	The following observations are worthy of note:
+
+	* runcmd() works by calling 'fork' to create a subprocess and one of 
+	the members of the 'exec' family of functions to execute 'command' If 
+	'exec'fails to replace the subrocess image (e.g. because the program is
+	not found or the caller has no execution permission), the value exit
+	status received in 'result' is that of the unchanged subprocess image
+	and not of the specified command.  IS_EXECOK() returns EXECFAILSTATUS 
+	if the function has not been able to execute 'command'. It should be 
+	bear in mind, however, that a successful executed command may itself 
+	return the value of EXITSTATUSFAIL, and this solely information may 
+	not be regarded as an evidence that command execution has failed. 
+	As for that, the macro IS_EXECKOK() may be used for disambiguation.  
+	
+	* If a process terminates abnormally, then its exit status has no
+	 meaning. In this case, EXITSTATUS() returns zero.
+
+	* in nonblocking mode, the subprocess termination and exit status are 
+	  not known by the time runcmd() returns.  In this case IS_NORMTERM(),
+	  EXITSTATUS() and EXECOK(), all them return zero and have no meaning.
+	  The caller process may use IS_NONBLOCK() for disambiguation. 
+
+	Subprocess's standard input, output and error may be redirected. To that
+	end the caller must pass a pointer to an array of tree integers as the
+	argument 'io'.  The integers are interpreted as files descriptors of
+	previously opened files. Files are neither closed nor flushed by the
+	function.  runcmd() does not check if write/write operations are
+	correctly performed.
+
+
+RETURN VALUE
+
+       On success, runcmd() returns the subprocess' pid; on failure, returns -1.
+
+CONFORMING TO
+
+	POSIXeg v1.
+
+NOTES
+	runcmd() interpret every blank-separated word of 'command' as an
+	argument to be passed to one of the members of the 'exec' family of
+	functions, except for the last word if it starts with '&'. In this case
+	the function interpret it as a symbol indicating that the function 
+	should return immediately instead of blocking until the subprocess
+	completes. For instance if 'command' is 'prog arg1 arg2 argN &', 
+	then function will execute 'prog' with arguments 'arg1', 'arg2' and
+	'arg3' in nonblocking mode. Unlike 'system' function of standard C
+	library, function runcmd() does not interpret any other character other
+	than a trailing '&' as a special symbol. For instance, characters '<' 
+	and '|', understood as the redirection and pipe symbols by /bin/sh, 
+	respectively, are interpreted as any other character by runcmd ().
+	For instance, if 'command' is 'prog arg > out', 'prog' is executed
+	with arguments 'arg', '>' and 'out'. Input-output redirection either
+	for files or pipes can be achieved by means of built-in functionality
+	accessible with 'io' parameter.
+
+
+	If the caller process stores the address of a function to the global
+	variable runcmd_onexit, this function is registered as a handler
+	for the signal SIGCHLD. If this signal is blocked or ignored by
+	the caller process, runcmd_onexit() will not be invoked.
+
+	runcmd() does not perform any terminal control policy. Both the caller
+	process and the subprocess are executed in the same session so that
+	conflict in accessing the terminal be arise (SIGTTIN and SIGTTOUT are
+	not handled specially).
+
+	Parameter 'command' is unchanged after execution.	
+
+EXAMPLE
+
+	runcmd ("ls foo", &result, NULL);
+
+	executes the 'ls'. If 'ls' runs successfully and file 'foo' is found,
+	EXECOK(result), IS_NONBLOCK(result) and IS_NORMTERM(result), all them
+	return true and EXITSTATUS(result) returns o (ls returns 0 on success);
+	if 'foo' is not found, EXITSTATUS(result) returns 2 (ls man page).
+
+	runcmd ("nosuchfile", &result, NULL);
+
+	if 'nosuchfile' cannot be executed, EXECOK(result) returns false, 
+	IS_NONBLOCK(result) returns true, IS_NORMTERM(result) returns false
+	and EXITSTATUS(result) return EXECFAILSTATUS.
+
+
+SEE ALSO
+
+        POSIXeg documentation.
+
+AUTHORS
+	 runcmd skeleton was written by Monaco F. J. as part of POSIXeg project.
+
+REPORTING BUGS
+
+	Bugs may be reported to monaco@icmc.usp.br.
+
+COLOPHON
+
+	The implementation of runcmd() provided by POSIXeg is a skeleton to be
+	developed as an exercise. The work consists in completing the 
+	implementation to meet the specifications outlined in this man-page-like
+	documentation file, and according to README.TXT. Good job.
+
+COPYRIGHT
+
+	This file is part of part of POSIX Exempli Gratia - POSIXeg.
+    	Copyright (c) 2015 Francisco Jose Monaco <monaco@icmc.usp.br>
+    	POSIXeg is Free Open Source Software, distributed under the terms ofthe
+	General Public License version 3 any later version. You may obtain a 
+	copy of the licence and the sorce code from POSIXeg repository at 
+	https://gitlab.com/monaco/posixeg
+
+	You may redistribute this file with your own project either 'as is' or
+	as a derivative work. If you do so, please retain this copyright note
+	and add some annotation explicitly stating your modifications. 
